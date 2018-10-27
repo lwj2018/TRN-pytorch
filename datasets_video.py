@@ -4,7 +4,7 @@ import torchvision
 import torchvision.datasets as datasets
 
 
-ROOT_DATASET = 'video_datasets'
+ROOT_DATASET = '/home/liweijie/TRN-pytorch/input'
 
 
 def return_something(modality):
@@ -98,10 +98,20 @@ def return_moments(modality):
         os.exit()
     return filename_categories, filename_imglist_train, filename_imglist_val, root_data, prefix
 
+def return_pbd(modality):
+    filename_categories = 'list/categories.txt'
+    if modality == 'RGB':
+        prefix = 'img_{:05d}.jpg'
+        root_data = '/home/liweijie/TRN-pytorch'
+        filename_imglist_train = 'list/train_list_trn.txt'
+        filename_imglist_val = 'list/test_list_trn.txt'
+    elif modality == 'Flow':
+        pass
+    return filename_categories, filename_imglist_train, filename_imglist_val, root_data, prefix    
 
 def return_dataset(dataset, modality):
     dict_single = {'jester': return_jester, 'something': return_something, 'somethingv2': return_somethingv2,
-                   'charades': return_charades, 'moments': return_moments}
+                   'charades': return_charades, 'moments': return_moments, 'pbd': return_pbd}
     if dataset in dict_single:
         file_categories, file_imglist_train, file_imglist_val, root_data, prefix = dict_single[dataset](modality)
     else:

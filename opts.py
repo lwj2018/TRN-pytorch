@@ -1,6 +1,6 @@
 import argparse
 parser = argparse.ArgumentParser(description="PyTorch implementation of Temporal Segment Networks")
-parser.add_argument('dataset', type=str, choices=['something','jester','moments'])
+parser.add_argument('dataset', type=str, choices=['something','jester','moments','pbd'])
 parser.add_argument('modality', type=str, choices=['RGB', 'Flow'])
 parser.add_argument('--train_list', type=str,default="")
 parser.add_argument('--val_list', type=str, default="")
@@ -38,7 +38,7 @@ parser.add_argument('--no_partialbn', '--npb', default=False, action="store_true
 # ========================= Monitor Configs ==========================
 parser.add_argument('--print-freq', '-p', default=20, type=int,
                     metavar='N', help='print frequency (default: 10)')
-parser.add_argument('--eval-freq', '-ef', default=5, type=int,
+parser.add_argument('--eval-freq', '-ef', default=1, type=int,
                     metavar='N', help='evaluation frequency (default: 5)')
 
 
@@ -55,7 +55,7 @@ parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
 parser.add_argument('--gpus', nargs='+', type=int, default=None)
 parser.add_argument('--flow_prefix', default="", type=str)
 parser.add_argument('--root_log',type=str, default='log')
-parser.add_argument('--root_model', type=str, default='model')
+parser.add_argument('--root_model', type=str, default='/media/storage/liweijie/c3d_models/trn')
 parser.add_argument('--root_output',type=str, default='output')
 
 

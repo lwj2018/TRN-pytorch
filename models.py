@@ -153,6 +153,7 @@ class TSN(nn.Module):
                         m.eval()
 
                         # shutdown update in frozen mode
+                        # HAVE_CHANGED origin is both false
                         m.weight.requires_grad = False
                         m.bias.requires_grad = False
 
@@ -217,7 +218,7 @@ class TSN(nn.Module):
             sample_len = 3 * self.new_length
             input = self._get_diff(input)
 
-        base_out = self.base_model(input.view((-1, sample_len) + input.size()[-2:]))
+        base_out = self.base_model(input.view( (-1, sample_len) + input.size()[-2:]) )
 
         if self.dropout > 0:
             base_out = self.new_fc(base_out)

@@ -109,7 +109,7 @@ class TSNDataSet(data.Dataset):
         record = self.video_list[index]
         # check this is a legit video folder
         while not os.path.exists(os.path.join(self.root_path, record.path, self.image_tmpl.format(1))):
-            print(os.path.join(self.root_path, record.path, self.image_tmpl.format(1)))
+            print("\033[31m this path not exist: {}\033[0m".format(os.path.join(self.root_path, record.path, self.image_tmpl.format(1))))
             index = np.random.randint(len(self.video_list))
             record = self.video_list[index]
 
@@ -136,3 +136,109 @@ class TSNDataSet(data.Dataset):
 
     def __len__(self):
         return len(self.video_list)
+
+
+class VideoDataset(data.Dataset):
+    def __init__(self, root_path = '/home/liweijie/C3D/C3D-v1.0/examples/c3d_finetuning/input/test_frm', 
+                 directory = 'gearbox', video_length = 903, seq_length = 20,
+                 num_segments=3, new_length=1, modality='RGB',
+                 image_tmpl='{:06d}.jpg', transform=None,
+                 force_grayscale=False, random_shift=True, test_mode=True):
+
+        self.root_path = root_path
+        self.video_length = video_length
+        self.seq_length = seq_length
+        self.num_segments = num_segments
+        self.new_length = new_length
+        self.modality = modality
+        self.image_tmpl = image_tmpl
+        self.transform = transform
+        self.random_shift = random_shift
+        self.test_mode = test_mode
+        self.directory = directory
+
+        if self.modality == 'RGBDiff':
+            self.new_length += 1# Diff needs one more image to calculate diff
+
+    def _load_image(self, directory, idx):
+        if self.modality == 'RGB' or self.modality == 'RGBDiff':
+            try:
+                return [Image.open(os.path.join(self.root_path, directory, self.image_tmpl.format(idx))).convert('RGB')]
+            except Exception:
+                print('error loading image:', os.path.join(self.root_path, directory, self.image_tmpl.format(idx)))
+                return [Image.open(os.path.join(self.root_path, directory, self.image_tmpl.format(1))).convert('RGB')]
+        elif self.modality == 'Flow':
+            try:
+                idx_skip = 1 + (idx-1)*5
+                flow = Image.open(os.path.join(self.root_path, directory, self.image_tmpl.format(idx_skip))).convert('RGB')
+            except Exception:
+                print('error loading flow file:', os.path.join(self.root_path, directory, self.image_tmpl.format(idx_skip)))
+                flow = Image.open(os.path.join(self.root_path, directory, self.image_tmpl.format(1))).convert('RGB')
+            # the input flow file is RGB image with (flow_x, flow_y, blank) for each channel
+            flow_x, flow_y, _ = flow.split()
+            x_img = flow_x.convert('L')
+            y_img = flow_y.convert('L')
+
+            return [x_img, y_img]
+
+    def _sample_indices(self):
+        """
+
+        :param record: VideoRecord
+        :return: list
+        """
+
+        average_duration = (self.seq_length - self.new_length + 1) // self.num_segments
+        if average_duration > 0:
+            offsets = np.multiply(list(range(self.num_segments)), average_duration) + randint(average_duration, size=self.num_segments)
+        elif self.seq_length > self.num_segments:
+            offsets = np.sort(randint(self.seq_length - self.new_length + 1, size=self.num_segments))
+        else:
+            offsets = np.zeros((self.num_segments,))
+        return offsets + 1
+
+    def _get_val_indices(self):
+        if self.seq_length > self.num_segments + self.new_length - 1:
+            tick = (self.seq_length - self.new_length + 1) / float(self.num_segments)
+            offsets = np.array([int(tick / 2.0 + tick * x) for x in range(self.num_segments)])
+        else:
+            offsets = np.zeros((self.num_segments,))
+        return offsets + 1
+
+    def _get_test_indices(self):
+
+        tick = (self.seq_length - self.new_length + 1) / float(self.num_segments)
+
+        offsets = np.array([int(tick / 2.0 + tick * x) for x in range(self.num_segments)])
+
+        return offsets + 1
+
+    def __getitem__(self, index):
+        # check this is a legit video folder
+        if not os.path.exists(os.path.join(self.root_path, self.directory, self.image_tmpl.format(index+1))):
+            print("\033[31m this path not exist: {}\033[0m".format(os.path.join(self.root_path, self.directory, self.image_tmpl.format(index))))
+            raise NameError
+
+        if not self.test_mode:
+            segment_indices = self._sample_indices() if self.random_shift else self._get_val_indices()
+        else:
+            segment_indices = self._get_test_indices()
+
+        return self.get(segment_indices, index)
+
+    def get(self, indices, index):
+
+        images = list()
+        for seg_ind in indices:
+            p = int(seg_ind)
+            for i in range(self.new_length):
+                seg_imgs = self._load_image(self.directory, p+index)
+                images.extend(seg_imgs)
+                if p < self.seq_length:
+                    p += 1
+
+        process_data = self.transform(images)
+        return process_data
+
+    def __len__(self):
+        return self.video_length

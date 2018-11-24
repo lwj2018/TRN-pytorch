@@ -16,6 +16,57 @@ import datasets_video
 from torch.nn import functional as F
 import socket
 from collections import deque
+import threading
+
+q = deque()     # the queue for images 
+video_label = ""      # the predicted str label
+imageCount = 0
+imageTimeStamp = 0
+labelTimeStamp = 0
+imageMutex = threading.Lock()     # it is used for the match between imageTimeStamp and image
+labelMutex = threading.Lock()     # it is used for the match between labelTimeStamp and label
+
+def tcplink(sock, addr):
+    print('Accept new connection from %s:%s...' % addr)
+    out_folder = "{}/{}".format(args.video_root, args.directory)
+    if not os.path.exists(out_folder):
+        os.makedirs(out_folder)
+    while True:
+        # get buf_size from client
+        start = time.time()
+        buf_size = sock.recv(5)
+        buf_size = int(buf_size[0:4].decode())
+        print("\033[36m the buf size is :{}\033[0m".format(buf_size))
+        # get image from client
+        data = sock.recv(buf_size+1, socket.MSG_WAITALL)
+        print("\033[36m the length of data is: {}\033[0m".format(len(data)))
+        # get imageTimeStamp from client
+        strTimeStamp = sock.recv(100)
+        imageMutex.acquire()   # get the imageMutex, not change q and imageTimeStamp
+        imageTimeStamp = int(strTimeStamp)
+        # process the str format image
+        data = np.fromstring(data, dtype = np.uint8)
+        img = cv.imdecode(data, cv.IMREAD_COLOR)
+        # imageCount += 1
+        # cv.imwrite("{}/{}/{:06d}.jpg".format(args.video_root,args.directory,imageCount), img)
+        # cv.imshow("img",img)
+        # cv.waitKey(5)
+        img = Image.fromarray(cv.cvtColor(img,cv.COLOR_BGR2RGB)).convert('RGB')
+        end = time.time()
+        print("\033[36m Receiving and processing image cost : {} ms\033[0m".format((end-start)*1000))
+        # maintain the queue
+        q.append(img)
+        if len(q)>args.seq_length:
+            q.popleft()
+        imageMutex.release()   # release the imageMutex
+        # temp store the label and its time stamp
+        labelMutex.acquire()
+        temp_video_label = video_label
+        tempLabelTimeStamp = labelTimeStamp
+        labelMutex.release()
+        # send the video label and label time stamp
+        sock.send((temp_video_label+'\0').encode('utf-8'))
+        sock.send((tempLabelTimeStamp+'\0').encode('utf-8'))
 
 # options
 parser = argparse.ArgumentParser(
@@ -39,17 +90,18 @@ parser.add_argument('--num_set_segments',type=int, default=1,help='TODO: select 
 parser.add_argument('--softmax', type=int, default=0)
 parser.add_argument('--video_width', type=int, default=171)
 parser.add_argument('--video_height', type=int, default=128)
-parser.add_argument('--directory', type=str, default='gearbox')
+parser.add_argument('--directory', type=str, default='test1')
 parser.add_argument('--video_prefix', type=str, default='{:06d}.jpg')
 parser.add_argument('--video_outpath', type=str, default='output/video')
-parser.add_argument('--video_root', type=str, default='/home/liweijie/C3D/C3D-v1.0/examples/c3d_finetuning/input/test_frm')
+parser.add_argument('--video_root', type=str, default='/media/storage/liweijie/datasets/test_videos')
 parser.add_argument('--seq_length', type=int, default=20)
 # video_lenth = origin_video_length 
 parser.add_argument('--video_length', type=int, default=355)
 parser.add_argument('--speed', type=int, default=1)
-parser.add_argument('--threshold', type=int, default=20)
+parser.add_argument('--threshold', type=int, default=30)
 parser.add_argument('--host', type=str, default="10.12.218.183")
 parser.add_argument('--port', type=int, default=3000)
+parser.add_argument('--buf_size', type=int,default=10000)
 
 args = parser.parse_args()
 
@@ -99,27 +151,27 @@ else:
     raise ValueError("Only 1 and 10 crops are supported while we got {}".format(args.test_crops))
 
 transform = torchvision.transforms.Compose([
-    GroupOverSample(net.input_size, net.scale_size),
+    GroupScale(net.scale_size),
+    GroupCenterCrop(net.input_size),
     Stack(roll=(args.arch in ['BNInception', 'InceptionV3'])),
     ToTorchFormatTensor(div=(args.arch not in ['BNInception', 'InceptionV3'])),
     GroupNormalize(net.input_mean, net.input_std),
 ])
 
 net = torch.nn.DataParallel(net.cuda())
+net.eval()
 
 # creating the socket
 # CONFIG
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-#s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # the port for listening
 s.bind((args.host, args.port))
 print("Waiting for connecting...")
 # receive a new connection
-#s.listen(5)
-#sock, addr = s.accept()
-#print('Accept new connection from %s:%s...' % addr)
-#sock.send(b'Welcome!\0')
-q = deque()     # the queue for images 
+s.listen(5)
+sock, addr = s.accept()
+t = threading.Thread(target=tcplink, args=(sock,addr))
+t.start()
 # config for post process
 now_label = -1
 possible_label = -1
@@ -129,40 +181,36 @@ lasting_threshold = args.threshold
 video_label = "no predict"   # string label will be send to client
 if not os.path.exists("recvImg"):
     os.makedirs("recvImg")
-for i in range(args.video_length):
-    # get image from client
-    start = time.time()
-    # buf_size = sock.recv(100)
-    # buf_size = int(buf_size)
-    # print("buf size is: {}".format(buf_size))
-    # data = sock.recv(buf_size, socket.MSG_WAITALL)
-    data, address = s.recvfrom(10000)
-    #time.sleep(0.001)
-    print("the length of data is: {}".format(len(data)))
-    data = np.fromstring(data, dtype = np.uint8)
-    img = cv.imdecode(data, cv.IMREAD_COLOR)
-    cv.imwrite("recvImg/{:06d}.jpg".format(i+1), img)
-    img = Image.fromarray(cv.cvtColor(img,cv.COLOR_BGR2RGB))
-    end = time.time()
-    print("\033[36m Receiving and processing image cost : {} ms\033[0m".format((end-start)*1000))
-
-    q.append(img)
-    if len(q)>args.seq_length:
-        start = time.time()
-        q.popleft()
+while True:
+    # key = cv.waitKey(1)
+    # if key=='q' or key=='Q':
+    #     break
+    if len(q)>=args.seq_length:
+        # process the q to get input tensor
+        imageMutex.acquire()  # get the imageMutex, q and time stamp cannot be changed
         img_list = list(q)
-        img_list = img_list[::int(np.ceil(args.seq_length/float(args.test_segments)))]
-        print(len(img_list))
+        tempTimeStamp = imageTimeStamp
+        imageMutex.release()  # release the imageMutex 
+        tick = args.seq_length/float(args.test_segments)
+        img_list = [img_list[int(tick / 2.0 + tick * x)] for x in range(args.test_segments)]
+        imageCount += 1
         input_data = transform(img_list)
+        start = time.time()
         input_var = torch.autograd.Variable(input_data.view(-1, 3, input_data.size(1), input_data.size(2)),
-                                    volatile=True).unsqueeze(0)
+                                   volatile=True).unsqueeze(0)
+        # predict
         logits = net(input_var)
-        h_x = torch.mean(F.softmax(logits), dim=0).data
+        cnt_time = time.time() - start
+        h_x = torch.mean(logits, dim=0).data
         probs, idx = h_x.sort(0, True)
         video_pred = idx[0]     # the int label for now video
+        print("\033[35m now h_x is : {}\033[0m".format(h_x))
+        labelMutex.acquire()
         video_label = categories[video_pred]  # the str label for video
-        cnt_time = time.time() - start
+        labelTimeStamp = tempTimeStamp
+        labelMutex.release()
         print("\033[35m predict using net cost {}ms\033[0m".format(cnt_time*1000))    # print the costed time
+        # flush the video label using some rule
         if video_pred!=now_label:
             if video_pred == possible_label:
                 possible_lasting_count+=1
@@ -180,9 +228,7 @@ for i in range(args.video_length):
             video_label = categories[now_label] # when action has lasting for enough time video_label changed
         if now_lasting_count>=lasting_threshold and now_label!=-1:
             video_label = categories[now_label] # when action has lasting for enough time video_label changed
-    #sock.send((video_label+'\0').encode('utf-8'))
-    #s.sendto((video_label+'\0').encode('utf-8'), ("10.12.218.81", 1000))
-    print("\033[34m now label is : {}\033[0m".format(video_label))
+    print("\033[35m now label is : {}\033[0m".format(video_label))
 s.close()
 
 

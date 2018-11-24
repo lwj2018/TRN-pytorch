@@ -25,6 +25,8 @@ imageTimeStamp = 0
 labelTimeStamp = 0
 imageMutex = threading.Lock()     # it is used for the match between imageTimeStamp and image
 labelMutex = threading.Lock()     # it is used for the match between labelTimeStamp and label
+imageEvent = threading.Event()
+labelEvent = threading.Event()
 
 def tcplink(sock, addr):
     print('Accept new connection from %s:%s...' % addr)
@@ -54,7 +56,9 @@ def tcplink(sock, addr):
         q.append(img)
         if len(q)>args.seq_length:
             q.popleft()
+        imageEvent.set()     # allow the net to predict
         # send the video label
+        labelEvent.wait()    # waiting for net changing the label 
         sock.send((video_label+'\0').encode('utf-8'))
 
 # options
@@ -176,6 +180,7 @@ while True:
     #     break
     if len(q)>=args.seq_length:
         # process the q to get input tensor
+        imageEvent.wait()
         img_list = list(q)
         tick = args.seq_length/float(args.test_segments)
         img_list = [img_list[int(tick / 2.0 + tick * x)] for x in range(args.test_segments)]
@@ -210,6 +215,7 @@ while True:
             video_label = categories[now_label] # when action has lasting for enough time video_label changed
         if now_lasting_count>=lasting_threshold and now_label!=-1:
             video_label = categories[now_label] # when action has lasting for enough time video_label changed
+        labelEvent.set()
     print("\033[35m now label is : {}\033[0m".format(video_label))
 s.close()
 

@@ -146,7 +146,7 @@ class VideoDataset(data.Dataset):
                  force_grayscale=False, random_shift=True, test_mode=True):
 
         self.root_path = root_path
-        self.video_length = video_length
+        self.video_length = video_length - seq_length
         self.seq_length = seq_length
         self.num_segments = num_segments
         self.new_length = new_length

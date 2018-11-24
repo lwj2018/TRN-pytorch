@@ -40,10 +40,6 @@ def tcplink(sock, addr):
         # get image from client
         data = sock.recv(buf_size+1, socket.MSG_WAITALL)
         print("\033[36m the length of data is: {}\033[0m".format(len(data)))
-        # get imageTimeStamp from client
-        strTimeStamp = sock.recv(100)
-        imageMutex.acquire()   # get the imageMutex, not change q and imageTimeStamp
-        imageTimeStamp = int(strTimeStamp)
         # process the str format image
         data = np.fromstring(data, dtype = np.uint8)
         img = cv.imdecode(data, cv.IMREAD_COLOR)
@@ -58,15 +54,8 @@ def tcplink(sock, addr):
         q.append(img)
         if len(q)>args.seq_length:
             q.popleft()
-        imageMutex.release()   # release the imageMutex
-        # temp store the label and its time stamp
-        labelMutex.acquire()
-        temp_video_label = video_label
-        tempLabelTimeStamp = labelTimeStamp
-        labelMutex.release()
-        # send the video label and label time stamp
-        sock.send((temp_video_label+'\0').encode('utf-8'))
-        sock.send((tempLabelTimeStamp+'\0').encode('utf-8'))
+        # send the video label
+        sock.send((video_label+'\0').encode('utf-8'))
 
 # options
 parser = argparse.ArgumentParser(
@@ -187,10 +176,7 @@ while True:
     #     break
     if len(q)>=args.seq_length:
         # process the q to get input tensor
-        imageMutex.acquire()  # get the imageMutex, q and time stamp cannot be changed
         img_list = list(q)
-        tempTimeStamp = imageTimeStamp
-        imageMutex.release()  # release the imageMutex 
         tick = args.seq_length/float(args.test_segments)
         img_list = [img_list[int(tick / 2.0 + tick * x)] for x in range(args.test_segments)]
         imageCount += 1
@@ -204,11 +190,7 @@ while True:
         h_x = torch.mean(logits, dim=0).data
         probs, idx = h_x.sort(0, True)
         video_pred = idx[0]     # the int label for now video
-        print("\033[35m now h_x is : {}\033[0m".format(h_x))
-        labelMutex.acquire()
         video_label = categories[video_pred]  # the str label for video
-        labelTimeStamp = tempTimeStamp
-        labelMutex.release()
         print("\033[35m predict using net cost {}ms\033[0m".format(cnt_time*1000))    # print the costed time
         # flush the video label using some rule
         if video_pred!=now_label:

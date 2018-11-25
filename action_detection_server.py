@@ -27,34 +27,61 @@ imageMutex = threading.Lock()     # it is used for the match between imageTimeSt
 labelMutex = threading.Lock()     # it is used for the match between labelTimeStamp and label
 
 def tcplink(sock, addr):
+    '''
+        协议：
+            'predict', 'train' :  status | buf_size
+            'record'           :  status | buf_size | if_end | label | labelCount
+    '''
     print('Accept new connection from %s:%s...' % addr)
     out_folder = "{}/{}".format(args.video_root, args.directory)
     if not os.path.exists(out_folder):
         os.makedirs(out_folder)
     while True:
-        # get buf_size from client
+        # 接受信息，按照协议进行解析
         start = time.time()
-        buf_size = sock.recv(5)
-        buf_size = int(buf_size[0:4].decode())
-        print("\033[36m the buf size is :{}\033[0m".format(buf_size))
-        # get image from client
+        message = sock.recv(100)
+        for i in range(100):
+            char = message[i]
+            if char == 0:
+                break
+        message = message[0:i]
+        print("\033[36m [MESSAGE]:  {}".format(message))
+        message = message.decode()
+        messages = message.split('|')
+        status = messages[0]
+        if status == 'predict' or status == 'train':
+            assert len(messages)==2
+            buf_size = int(messages[1].rstrip('\0'))
+        if status == 'record':
+            assert len(messages)==5
+            buf_size = int(messages[1])
+            if_end = messages[2]
+            label = int(messages[3])
+            labelCount = int(messages[4].rstrip('\0'))
+        #print("\033[36m the buf size is :{}\033[0m".format(buf_size))
+        # 接收图片
         data = sock.recv(buf_size+1, socket.MSG_WAITALL)
-        print("\033[36m the length of data is: {}\033[0m".format(len(data)))
-        # process the str format image
+        #print("\033[36m the length of data is: {}\033[0m".format(len(data)))
+        # 恢复被转换为字节流的图片
         data = np.fromstring(data, dtype = np.uint8)
         img = cv.imdecode(data, cv.IMREAD_COLOR)
-        # imageCount += 1
-        # cv.imwrite("{}/{}/{:06d}.jpg".format(args.video_root,args.directory,imageCount), img)
-        # cv.imshow("img",img)
-        # cv.waitKey(5)
+        # record 状态下记录图片
+        if status == 'record':
+            imageCount += 1
+            out_folder = "{}/{:d}_{:d}".format(args.video_root, label, labelCount)
+            if not os.path.exists(out_folder):
+                os.makedirs(out_folder)
+            cv.imwrite("{}/{:06d}.jpg".format(out_folder,imageCount), img)
+        else:
+            imageCount = 0  # 在其他状态下清空计数
         img = Image.fromarray(cv.cvtColor(img,cv.COLOR_BGR2RGB)).convert('RGB')
         end = time.time()
         print("\033[36m Receiving and processing image cost : {} ms\033[0m".format((end-start)*1000))
-        # maintain the queue
+        # 维持固定长度的队列
         q.append(img)
         if len(q)>args.seq_length:
             q.popleft()
-        # send the video label
+        # 发送动作标签
         sock.send((video_label+'\0').encode('utf-8'))
 
 # options
@@ -82,7 +109,7 @@ parser.add_argument('--video_height', type=int, default=128)
 parser.add_argument('--directory', type=str, default='test1')
 parser.add_argument('--video_prefix', type=str, default='{:06d}.jpg')
 parser.add_argument('--video_outpath', type=str, default='output/video')
-parser.add_argument('--video_root', type=str, default='/media/storage/liweijie/datasets/test_videos')
+parser.add_argument('--video_root', type=str, default='/media/storage/liweijie/datasets/pbd-v0-origin')
 parser.add_argument('--seq_length', type=int, default=20)
 # video_lenth = origin_video_length 
 parser.add_argument('--video_length', type=int, default=355)

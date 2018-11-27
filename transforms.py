@@ -60,14 +60,17 @@ class GroupRandomHorizontalFlip(object):
             return img_group
 
 class GroupRandomHorizontalShift(object):
-    """Randomly horizontally shifts the given PIL.Image with a probability of 0.5
-        First transform to np.array, and then to PIL.Image
+    """
+        随机左右偏移图片
+        参数：
+            min : 最大的向左偏移量
+            max : 最大的向右偏移量
     """
     def __init__(self, min = -5, max = 30):
         self.min = min
         self.max = max
     def __call__(self, img_group):
-        x_shift = random.randint(min,max)
+        x_shift = random.randint(self.min,self.max)
         sample_img = img_group[0]
         sample_arr = np.asarray(sample_img)
         height = sample_arr.shape[0]
@@ -83,6 +86,36 @@ class GroupRandomHorizontalShift(object):
             new_img = Image.fromarray(new_arr)
             new_img_group.append(new_img)
         return new_img_group
+
+class GroupRandomChangeIntensity(object):
+    """
+        随机改变图片的光照强度
+        参数：
+            min : 除以100后对应变化系数alpha的最小值，此时最暗
+            max : 除以100后对应变化系数alpha的最大值，此时最亮
+    """
+    def __init__(self, min = 60, max = 200):
+        self.min = min
+        self.max = max
+    def __call__(self, img_group):
+        # 有50%的几率会发生改变
+        if_change = random.random()
+        new_img_group = []
+        if if_change < 0.5:
+            for img in img_group:
+                arr = np.asarray(img)
+                new_arr = np.zeros(arr.shape, dtype = np.uint8)
+                alpha = random.randint(self.min,self.max) / 100.0
+                beta = 0
+                cvt_arr = cv.cvtColor(arr, cv.COLOR_RGB2BGR)
+                cv.convertScaleAbs(cvt_arr, new_arr, alpha, beta)
+                new_arr = cv.cvtColor(new_arr, cv.COLOR_BGR2RGB)
+                new_img = Image.fromarray(new_arr)
+                new_img_group.append(new_img)
+                return new_img_group
+            else:
+                return img_group
+
 
 
 class GroupNormalize(object):

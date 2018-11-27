@@ -59,6 +59,31 @@ class GroupRandomHorizontalFlip(object):
         else:
             return img_group
 
+class GroupRandomHorizontalShift(object):
+    """Randomly horizontally shifts the given PIL.Image with a probability of 0.5
+        First transform to np.array, and then to PIL.Image
+    """
+    def __init__(self, min = -5, max = 30):
+        self.min = min
+        self.max = max
+    def __call__(self, img_group):
+        x_shift = random.randint(min,max)
+        sample_img = img_group[0]
+        sample_arr = np.asarray(sample_img)
+        height = sample_arr.shape[0]
+        width = sample_arr.shape[1]
+        if x_shift < 0 :
+            x_shift = x_shift + width
+        new_img_group = []
+        for img in img_group:
+            arr = np.asarray(img)
+            new_arr = np.zeros(arr.shape, dtype=np.uint8)
+            new_arr[:, x_shift:, :] = arr[:, :width - x_shift, :]
+            new_arr[:, :x_shift, :] = arr[:, width -x_shift:, :]
+            new_img = Image.fromarray(new_arr)
+            new_img_group.append(new_img)
+        return new_img_group
+
 
 class GroupNormalize(object):
     def __init__(self, mean, std):

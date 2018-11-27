@@ -18,7 +18,8 @@ import os
 # options
 parser = argparse.ArgumentParser(
     description="TRN testing on the full validation set")
-parser.add_argument('dataset', type=str, choices=['something','jester','moments','charades','pbd','pbdnew','pbd-v0'])
+parser.add_argument('dataset', type=str, choices=['something','jester','moments',
+                                        'charades','pbd','pbdnew','pbd-v0','pbd-v0.1'])
 parser.add_argument('modality', type=str, choices=['RGB', 'Flow', 'RGBDiff'])
 parser.add_argument('weights', type=str)
 parser.add_argument('--arch', type=str, default="resnet101")
@@ -80,8 +81,8 @@ net = TSN(num_class, args.test_segments if args.crop_fusion_type in ['TRN','TRNm
 checkpoint = torch.load(args.weights)
 print("model epoch {} best prec@1: {}".format(checkpoint['epoch'], checkpoint['best_prec1']))
 
-base_dict = {'.'.join(k.split('.')[1:]): v for k,v in list(checkpoint['state_dict'].items())}
-net.load_state_dict(base_dict)
+#base_dict = {'.'.join(k.split('.')[1:]): v for k,v in list(checkpoint['state_dict'].items())}
+#net.load_state_dict(base_dict)
 
 if args.test_crops == 1:
     cropping = torchvision.transforms.Compose([

@@ -26,6 +26,16 @@ labelTimeStamp = 0
 imageMutex = threading.Lock()     # it is used for the match between imageTimeStamp and image
 labelMutex = threading.Lock()     # it is used for the match between labelTimeStamp and label
 
+def train():
+    '''
+        完成数据预处理和训练的线程
+    '''
+    print("\033[32m [TRAIN]: Preprocessing the data...\033[0m")
+    os.system("python /media/storage/liweijie/datasets/process.py")
+    print("\033[32m [TRAIN]: Training...\033[0m")
+    os.system("bash train.sh")
+    print("\033[32m [TRAIN]: Training finished\033[0m")
+
 def tcplink(sock, addr):
     '''
         协议：
@@ -33,9 +43,6 @@ def tcplink(sock, addr):
             'record'           :  status | buf_size | if_end | label | labelCount
     '''
     print('Accept new connection from %s:%s...' % addr)
-    out_folder = "{}/{}".format(args.video_root, args.directory)
-    if not os.path.exists(out_folder):
-        os.makedirs(out_folder)
     while True:
         # 接受信息，按照协议进行解析
         start = time.time()
@@ -58,6 +65,9 @@ def tcplink(sock, addr):
             if_end = messages[2]
             label = int(messages[3])
             labelCount = int(messages[4].rstrip('\0'))
+        if status == 'train':
+            t_train = threading.Thread(target=train)
+            t_train.start()
         #print("\033[36m the buf size is :{}\033[0m".format(buf_size))
         # 接收图片
         data = sock.recv(buf_size+1, socket.MSG_WAITALL)
@@ -87,7 +97,8 @@ def tcplink(sock, addr):
 # options
 parser = argparse.ArgumentParser(
     description="TRN testing on the full validation set")
-parser.add_argument('dataset', type=str, choices=['something','jester','moments','charades','pbd','pbdnew','pbd-v0'])
+parser.add_argument('dataset', type=str, choices=['something','jester','moments',
+                                        'charades','pbd','pbdnew','pbd-v0','pbd-v0.1'])
 parser.add_argument('modality', type=str, choices=['RGB', 'Flow', 'RGBDiff'])
 parser.add_argument('weights', type=str)
 parser.add_argument('--arch', type=str, default="resnet101")

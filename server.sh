@@ -1,0 +1,1 @@
+python action_detection_server.py pbd-v0 RGB /media/storage/liweijie/c3d_models/trn/TRN_pbd-v0_RGB_BNInception_TRNmultiscale_segment3_best.pth.tar --arch BNInception --crop_fusion_type TRNmultiscale --test_segments 3  --threshold 20 --seq_length 5

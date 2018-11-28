@@ -5,6 +5,7 @@ import numpy as np
 import numbers
 import math
 import torch
+import cv2 as cv
 
 
 class GroupRandomCrop(object):
@@ -78,7 +79,7 @@ class GroupRandomHorizontalShift(object):
         if x_shift < 0 :
             x_shift = x_shift + width
         new_img_group = []
-        for img in img_group:
+        for i,img in enumerate(img_group):
             arr = np.asarray(img)
             new_arr = np.zeros(arr.shape, dtype=np.uint8)
             new_arr[:, x_shift:, :] = arr[:, :width - x_shift, :]
@@ -104,7 +105,7 @@ class GroupRandomChangeIntensity(object):
         if if_change < 0.5:
             alpha = random.randint(self.min,self.max) / 100.0
             beta = 0
-            for img in img_group:
+            for i,img in enumerate(img_group):
                 arr = np.asarray(img)
                 new_arr = np.zeros(arr.shape, dtype = np.uint8)
                 cvt_arr = cv.cvtColor(arr, cv.COLOR_RGB2BGR)
@@ -112,16 +113,16 @@ class GroupRandomChangeIntensity(object):
                 new_arr = cv.cvtColor(new_arr, cv.COLOR_BGR2RGB)
                 new_img = Image.fromarray(new_arr)
                 new_img_group.append(new_img)
-                return new_img_group
-            else:
-                return img_group
+            return new_img_group
+        else:
+            return img_group
 
 class GroupRandomRotate(object):
     """
         在50%的几率下会随机旋转图片
         参数：
-            min : 除以100后对应变化系数alpha的最小值，此时最暗
-            max : 除以100后对应变化系数alpha的最大值，此时最亮
+            min : 逆时针旋转的最大角度
+            max : 顺时针旋转的最大角度
     """
     def __init__(self, min = -20, max = 20):
         self.min = min
@@ -131,22 +132,22 @@ class GroupRandomRotate(object):
         if_change = random.random() 
         if if_change < 0.5:
             angle = random.randint(-20,20)
-            new_img_group = []
+            new_img_group = list()
             sample_img = img_group[0]
-            sample_arr = np.asarray(img)
+            sample_arr = np.asarray(sample_img)
             (h, w) = sample_arr.shape[:2]
             center = (w//2, h//2)
             M = cv.getRotationMatrix2D(center, angle, 1.0)
-            for img in img_group:
+            for i,img in enumerate(img_group):
                 arr = np.asarray(img)
                 cvt_arr = cv.cvtColor(arr, cv.COLOR_RGB2BGR)
                 rotated = cv.warpAffine(cvt_arr, M, (w,h))
                 new_arr = cv.cvtColor(rotated, cv.COLOR_BGR2RGB)
                 new_img = Image.fromarray(new_arr)
-                new_img_group.append(new_img)
-                return new_img_group
-            else:
-                return img_group
+                new_img_group.extend([new_img])
+            return new_img_group
+        else:
+            return img_group
 
 class GroupNormalize(object):
     def __init__(self, mean, std):

@@ -320,7 +320,9 @@ class TSN(nn.Module):
         if self.modality == 'RGB':
             return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75, .66]),
                                                    GroupRandomHorizontalFlip(is_flow=False),
-                                                   GroupRandomHorizontalShift()])
+                                                   GroupRandomHorizontalShift(),
+                                                   GroupRandomChangeIntensity(),
+                                                   GroupRandomRotate()])
         elif self.modality == 'Flow':
             return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75]),
                                                    GroupRandomHorizontalFlip(is_flow=True)])

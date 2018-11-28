@@ -89,7 +89,7 @@ class GroupRandomHorizontalShift(object):
 
 class GroupRandomChangeIntensity(object):
     """
-        随机改变图片的光照强度
+        在50%的几率下会随机改变图片的光照强度
         参数：
             min : 除以100后对应变化系数alpha的最小值，此时最暗
             max : 除以100后对应变化系数alpha的最大值，此时最亮
@@ -102,11 +102,11 @@ class GroupRandomChangeIntensity(object):
         if_change = random.random()
         new_img_group = []
         if if_change < 0.5:
+            alpha = random.randint(self.min,self.max) / 100.0
+            beta = 0
             for img in img_group:
                 arr = np.asarray(img)
                 new_arr = np.zeros(arr.shape, dtype = np.uint8)
-                alpha = random.randint(self.min,self.max) / 100.0
-                beta = 0
                 cvt_arr = cv.cvtColor(arr, cv.COLOR_RGB2BGR)
                 cv.convertScaleAbs(cvt_arr, new_arr, alpha, beta)
                 new_arr = cv.cvtColor(new_arr, cv.COLOR_BGR2RGB)
@@ -116,7 +116,37 @@ class GroupRandomChangeIntensity(object):
             else:
                 return img_group
 
-
+class GroupRandomRotate(object):
+    """
+        在50%的几率下会随机旋转图片
+        参数：
+            min : 除以100后对应变化系数alpha的最小值，此时最暗
+            max : 除以100后对应变化系数alpha的最大值，此时最亮
+    """
+    def __init__(self, min = -20, max = 20):
+        self.min = min
+        self.max = max
+    def __call__(self, img_group):
+        # 有50%的几率会发生改变
+        if_change = random.random() 
+        if if_change < 0.5:
+            angle = random.randint(-20,20)
+            new_img_group = []
+            sample_img = img_group[0]
+            sample_arr = np.asarray(img)
+            (h, w) = sample_arr.shape[:2]
+            center = (w//2, h//2)
+            M = cv.getRotationMatrix2D(center, angle, 1.0)
+            for img in img_group:
+                arr = np.asarray(img)
+                cvt_arr = cv.cvtColor(arr, cv.COLOR_RGB2BGR)
+                rotated = cv.warpAffine(cvt_arr, M, (w,h))
+                new_arr = cv.cvtColor(rotated, cv.COLOR_BGR2RGB)
+                new_img = Image.fromarray(new_arr)
+                new_img_group.append(new_img)
+                return new_img_group
+            else:
+                return img_group
 
 class GroupNormalize(object):
     def __init__(self, mean, std):

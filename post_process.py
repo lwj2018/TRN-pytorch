@@ -123,7 +123,6 @@ data_loader['10'] = torch.utils.data.DataLoader(
                    test_mode=True,
                    video_length=args.video_length,
                    seq_length=10,
-                   speed=args.speed,
                    transform=torchvision.transforms.Compose([
                        cropping,
                        Stack(roll=(args.arch in ['BNInception','InceptionV3'])),
@@ -142,7 +141,6 @@ data_loader['20'] = torch.utils.data.DataLoader(
                    test_mode=True,
                    video_length=args.video_length,
                    seq_length=20,
-                   speed=args.speed,
                    transform=torchvision.transforms.Compose([
                        cropping,
                        Stack(roll=(args.arch in ['BNInception','InceptionV3'])),
@@ -161,7 +159,6 @@ data_loader['40'] = torch.utils.data.DataLoader(
                    test_mode=True,
                    video_length=args.video_length,
                    seq_length=40,
-                   speed=args.speed,
                    transform=torchvision.transforms.Compose([
                        cropping,
                        Stack(roll=(args.arch in ['BNInception','InceptionV3'])),
@@ -240,49 +237,49 @@ writer = cv.VideoWriter(out_video_name,cv.VideoWriter_fourcc('M','J','P','G'),15
 save_file_name = "{}/{}_segment{}_window{}_speed{}_scores.npy".format(args.video_outpath,args.directory,
                                                             args.test_segments,args.seq_length,args.speed)
 
-# infor_list = []
-# for k in data_gen.keys():
-#     for i, data in data_gen[k]:
-#         rst = eval_video((i, data))
-#         scores = np.mean(rst[1], axis=0)
-#         video_pred = float(np.squeeze(np.argmax(scores)))
-#         max_score = float(np.squeeze(np.max(scores)))
-#         cnt_time = time.time() - proc_start_time
-#         infor = np.zeros([6], dtype=np.float32)
-#         infor[0] = i                # start frame
-#         infor[1] = i+int(k)         # end frame
-#         infor[2] = video_pred       # frame label
-#         infor[3] = max_score        # label score
-#         infor[4] = 1                # not selected : 1, selected : 0
-#         infor[5] = 1                # not abused : 1, abused : 0
-#         infor_list.append(infor)
-#         print('\033[34m [window {}] video {} done, total {}/{}, average {:.3f} sec/video, pred label: {}\033[0m'.format(int(k),
-#                                                                         i, 
-#                                                                         i+1,
-#                                                                         total_num[k],
-#                                                                         float(cnt_time) / (i+1),
-#                                                                         video_pred))
+infor_list = []
+for k in data_gen.keys():
+    for i, data in data_gen[k]:
+        rst = eval_video((i, data))
+        scores = np.mean(rst[1], axis=0)
+        video_pred = float(np.squeeze(np.argmax(scores)))
+        max_score = float(np.squeeze(np.max(scores)))
+        cnt_time = time.time() - proc_start_time
+        infor = np.zeros([6], dtype=np.float32)
+        infor[0] = i                # start frame
+        infor[1] = i+int(k)         # end frame
+        infor[2] = video_pred       # frame label
+        infor[3] = max_score        # label score
+        infor[4] = 1                # not selected : 1, selected : 0
+        infor[5] = 1                # not abused : 1, abused : 0
+        infor_list.append(infor)
+        print('\033[34m [window {}] video {} done, total {}/{}, average {:.3f} sec/video, pred label: {}\033[0m'.format(int(k),
+                                                                        i, 
+                                                                        i+1,
+                                                                        total_num[k],
+                                                                        float(cnt_time) / (i+1),
+                                                                        video_pred))
 
-# infor_list = np.array(infor_list)
-# length = infor_list.shape[0]
-# while(np.max(infor_list[:,4])>0):
-#     max_index = np.argmax(infor_list[:,3]*infor_list[:,4])
-#     max_start_frame = infor_list[max_index, 0]
-#     max_end_frame = infor_list[max_index, 1]
-#     infor_list[max_index, 4] = 0    
-#     for i in range(length):
-#         if infor_list[i,4]!=0:
-#             now_start_frame = infor_list[i,0]
-#             now_end_frame = infor_list[i,1]
-#             iou = (min(now_end_frame,max_end_frame) - max(now_start_frame,max_start_frame)) / (max(now_end_frame,max_end_frame) - min(now_start_frame,max_start_frame))
-#             if iou>0.5:
-#                 infor_list[i,4] = 0
-#                 infor_list[i,5] = 0
-#             elif (max_start_frame>now_start_frame) and (max_end_frame<now_end_frame):
-#                 infor_list[i,4] = 0
-#                 infor_list[i,5] = 0
-# np.save("output/infor_list.npy",infor_list)
-infor_list = np.load("output/infor_list.npy")
+infor_list = np.array(infor_list)
+length = infor_list.shape[0]
+while(np.max(infor_list[:,4])>0):
+    max_index = np.argmax(infor_list[:,3]*infor_list[:,4])
+    max_start_frame = infor_list[max_index, 0]
+    max_end_frame = infor_list[max_index, 1]
+    infor_list[max_index, 4] = 0    
+    for i in range(length):
+        if infor_list[i,4]!=0:
+            now_start_frame = infor_list[i,0]
+            now_end_frame = infor_list[i,1]
+            iou = (min(now_end_frame,max_end_frame) - max(now_start_frame,max_start_frame)) / (max(now_end_frame,max_end_frame) - min(now_start_frame,max_start_frame))
+            if iou>0:
+                infor_list[i,4] = 0
+                infor_list[i,5] = 0
+            elif (max_start_frame>now_start_frame) and (max_end_frame<now_end_frame):
+                infor_list[i,4] = 0
+                infor_list[i,5] = 0
+np.save("output/infor_list.npy",infor_list)
+#infor_list = np.load("output/infor_list.npy")
 show_map = np.zeros([200,args.video_length,3])
 # blue : place, green : screw, red : turndown, purple : press, yellow : empty  
 color_map = {0:[255,0,0],1:[0,255,0],2:[0,0,255],3:[255,0,255],4:[0,255,255]}

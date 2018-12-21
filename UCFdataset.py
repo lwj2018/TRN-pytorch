@@ -15,18 +15,19 @@ class VideoRecord(object):
         return self._data[0]
 
     @property
-    def num_frames(self):
+    def start_frame(self):
         return int(self._data[1])
 
     @property
     def label(self):
         return int(self._data[2])
 
-class TSNDataSet(data.Dataset):
+class UCFDataSet(data.Dataset):
     def __init__(self, root_path, list_file,
                  num_segments=3, new_length=1, modality='RGB',
                  image_tmpl='img_{:05d}.jpg', transform=None,
-                 force_grayscale=False, random_shift=True, test_mode=False):
+                 force_grayscale=False, random_shift=True, test_mode=False,
+                 seq_length = 16):
 
         self.root_path = root_path
         self.list_file = list_file
@@ -37,6 +38,8 @@ class TSNDataSet(data.Dataset):
         self.transform = transform
         self.random_shift = random_shift
         self.test_mode = test_mode
+        # 每个样本的长度固定为16
+        self.seq_length = seq_length
 
         if self.modality == 'RGBDiff':
             self.new_length += 1# Diff needs one more image to calculate diff
@@ -66,7 +69,7 @@ class TSNDataSet(data.Dataset):
 
     def _parse_list(self):
         # check the frame number is large >3:
-        # usualy it is [video_id, num_frames, class_idx]
+        # usualy it is [video_id, start_frame, class_idx]
         tmp = [x.strip().split(' ') for x in open(self.list_file)]
         tmp = [item for item in tmp if int(item[1])>=3]
         self.video_list = [VideoRecord(item) for item in tmp]
@@ -79,18 +82,19 @@ class TSNDataSet(data.Dataset):
         :return: list
         """
 
-        average_duration = (record.num_frames - self.new_length + 1) // self.num_segments
+        average_duration = (self.seq_length - self.new_length + 1) // self.num_segments
         if average_duration > 0:
             offsets = np.multiply(list(range(self.num_segments)), average_duration) + randint(average_duration, size=self.num_segments)
-        elif record.num_frames > self.num_segments:
-            offsets = np.sort(randint(record.num_frames - self.new_length + 1, size=self.num_segments))
+        elif self.seq_length > self.num_segments:
+            offsets = np.sort(randint(self.seq_length - self.new_length + 1, size=self.num_segments))
         else:
             offsets = np.zeros((self.num_segments,))
+        # 图片从1开始计数
         return offsets + 1
 
     def _get_val_indices(self, record):
-        if record.num_frames > self.num_segments + self.new_length - 1:
-            tick = (record.num_frames - self.new_length + 1) / float(self.num_segments)
+        if self.seq_length > self.num_segments + self.new_length - 1:
+            tick = (self.seq_length - self.new_length + 1) / float(self.num_segments)
             offsets = np.array([int(tick / 2.0 + tick * x) for x in range(self.num_segments)])
         else:
             offsets = np.zeros((self.num_segments,))
@@ -98,7 +102,7 @@ class TSNDataSet(data.Dataset):
 
     def _get_test_indices(self, record):
 
-        tick = (record.num_frames - self.new_length + 1) / float(self.num_segments)
+        tick = (self.seq_length - self.new_length + 1) / float(self.num_segments)
 
         offsets = np.array([int(tick / 2.0 + tick * x) for x in range(self.num_segments)])
 
@@ -125,9 +129,9 @@ class TSNDataSet(data.Dataset):
         for seg_ind in indices:
             p = int(seg_ind)
             for i in range(self.new_length):
-                seg_imgs = self._load_image(record.path, p)
+                seg_imgs = self._load_image(record.path, p+record.start_frame-1)
                 images.extend(seg_imgs)
-                if p < record.num_frames:
+                if p < self.seq_length:
                     p += 1
 
         process_data = self.transform(images)

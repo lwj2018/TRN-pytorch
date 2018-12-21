@@ -10,6 +10,7 @@ import torch.optim
 from torch.nn.utils import clip_grad_norm
 
 from dataset import TSNDataSet
+from UCFdataset import UCFDataSet
 from models import TSN
 from transforms import *
 from opts import parser
@@ -77,7 +78,7 @@ def main():
         data_length = 5
 
     train_loader = torch.utils.data.DataLoader(
-        TSNDataSet(args.root_path, args.train_list, num_segments=args.num_segments,
+        UCFDataSet(args.root_path, args.train_list, num_segments=args.num_segments,
                    new_length=data_length,
                    modality=args.modality,
                    image_tmpl=prefix,
@@ -91,7 +92,7 @@ def main():
         num_workers=args.workers, pin_memory=True)
 
     val_loader = torch.utils.data.DataLoader(
-        TSNDataSet(args.root_path, args.val_list, num_segments=args.num_segments,
+        UCFDataSet(args.root_path, args.val_list, num_segments=args.num_segments,
                    new_length=data_length,
                    modality=args.modality,
                    image_tmpl=prefix,

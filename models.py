@@ -11,7 +11,7 @@ class TSN(nn.Module):
                  base_model='resnet101', new_length=None,
                  consensus_type='avg', before_softmax=True,
                  dropout=0.8,img_feature_dim=256,
-                 crop_num=1, partial_bn=True, print_spec=True):
+                 crop_num=1, partial_bn=True, print_spec=True, dataset='pbd-v0.1'):
         super(TSN, self).__init__()
         self.modality = modality
         self.num_segments = num_segments
@@ -21,6 +21,7 @@ class TSN(nn.Module):
         self.crop_num = crop_num
         self.consensus_type = consensus_type
         self.img_feature_dim = img_feature_dim  # the dimension of the CNN feature to represent each frame
+        self.dataset = dataset
         if not before_softmax and consensus_type != 'avg':
             raise ValueError("Only avg consensus can be used after Softmax")
 
@@ -318,11 +319,16 @@ class TSN(nn.Module):
 
     def get_augmentation(self):
         if self.modality == 'RGB':
-            return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75, .66]),
-                                                   GroupRandomHorizontalFlip(is_flow=False),
-                                                   GroupRandomHorizontalShift(),
-                                                   GroupRandomRotate(),
-                                                   GroupRandomChangeIntensity()])
+            if self.dataset == 'pbd-v0.1':
+                return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75, .66]),
+                                                    GroupRandomHorizontalFlip(is_flow=False),
+                                                    GroupRandomHorizontalShift(),
+                                                    GroupRandomRotate(),
+                                                    GroupRandomChangeIntensity()])
+            else:
+                return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75, .66]),
+                                                    GroupRandomHorizontalFlip(is_flow=False),
+                                                    ])
         elif self.modality == 'Flow':
             return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75]),
                                                    GroupRandomHorizontalFlip(is_flow=True)])

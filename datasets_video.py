@@ -131,11 +131,22 @@ def return_pbd_v0_1(modality):
         pass
     return filename_categories, filename_imglist_train, filename_imglist_val, root_data, prefix    
 
+def return_ucf101(modality):
+    filename_categories = 'list/categories_ucf101.txt'
+    if modality == 'RGB':
+        prefix = 'image_{:05d}.jpg'
+        root_data = '/media/storage/liweijie/datasets/THUMOS14/UCF101_frames'
+        filename_imglist_train = 'list/train_list_ucf101.txt'
+        filename_imglist_val = 'list/test_list_ucf101.txt'
+    elif modality == 'Flow':
+        raise NameError
+        pass
+    return filename_categories, filename_imglist_train, filename_imglist_val, root_data, prefix    
 
 def return_dataset(dataset, modality):
     dict_single = {'jester': return_jester, 'something': return_something, 'somethingv2': return_somethingv2,
                    'charades': return_charades, 'moments': return_moments, 'pbd': return_pbd, 'pbd-v0':return_pbd_v0,
-                   'pbd-v0.1': return_pbd_v0_1}
+                   'pbd-v0.1': return_pbd_v0_1, 'ucf101': return_ucf101}
     if dataset in dict_single:
         file_categories, file_imglist_train, file_imglist_val, root_data, prefix = dict_single[dataset](modality)
     else:

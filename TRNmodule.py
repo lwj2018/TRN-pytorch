@@ -35,7 +35,7 @@ class RelationModuleMultiScale(torch.nn.Module):
 
     def __init__(self, img_feature_dim, num_frames, num_class):
         super(RelationModuleMultiScale, self).__init__()
-        self.subsample_num = 3 # how many relations selected to sum up [ k in the paper]
+        self.subsample_num = 3 # 每种关系模型采样数
         self.img_feature_dim = img_feature_dim
         self.scales = [i for i in range(num_frames, 1, -1)] # generate the multiple frame relations
 

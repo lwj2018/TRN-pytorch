@@ -28,6 +28,9 @@ imageMutex = threading.Lock()     # it is used for the match between imageTimeSt
 labelMutex = threading.Lock()     # it is used for the match between labelTimeStamp and label
 label_stack = []            # 手进入到手退出时间内产生标签的暂存区，通过统计出现次数最多的标签确定最终标签
 handFlag = False
+showFlag = '0'
+showStatus = 0
+showLastingCount = 0
 
 def train():
     '''
@@ -38,87 +41,6 @@ def train():
     print("\033[32m [TRAIN]: Training...\033[0m")
     os.system("bash train.sh")
     print("\033[32m [TRAIN]: Training finished\033[0m")
-
-def tcplink(sock, addr):
-    '''
-        协议：
-            'predict', 'train' :  status | buf_size
-            'record'           :  status | buf_size | if_end | label | labelCount
-    '''
-    global categories  # 引用主函数中的categories变量
-    global video_label
-    global q
-    global handFlag
-    print('Accept new connection from %s:%s...' % addr)
-    while True:
-        # 接受信息，按照协议进行解析
-        start = time.time()
-        message = sock.recv(100)
-        for i in range(100):
-            char = message[i]
-            if char == 0:
-                break
-        message = message[0:i]
-        print("\033[36m [MESSAGE]:  {}\033[0m".format(message))
-        message = message.decode()
-        messages = message.split('|')
-        status = messages[0]
-        if status == 'predict' or status == 'train':
-            assert len(messages)==2
-            buf_size = int(messages[1].rstrip('\0'))
-        if status == 'record':
-            assert len(messages)==5
-            buf_size = int(messages[1])
-            if_end = messages[2]
-            label = int(messages[3])
-            labelCount = int(messages[4].rstrip('\0'))
-        if status == 'train':
-            t_train = threading.Thread(target=train)
-            t_train.start()
-        #print("\033[36m the buf size is :{}\033[0m".format(buf_size))
-        # 接收图片
-        data = sock.recv(buf_size+1, socket.MSG_WAITALL)
-        #print("\033[36m the length of data is: {}\033[0m".format(len(data)))
-        # 恢复被转换为字节流的图片
-        data = np.fromstring(data, dtype = np.uint8)
-        img = cv.imdecode(data, cv.IMREAD_COLOR)
-        # 检测图像中是否含有手
-        handFlag = detect_hand(img)
-        # 维持固定长度的队列
-        if handFlag:
-            print("\033[36m [HAND] have hand \033[0m")
-            print(len(q))
-            q.append(img)
-            if len(q)>args.seq_length:
-                q.popleft()
-        else:
-            print("\033[36m [HAND] no hand \033[0m")
-            # 在手退出时修改动作标签
-            if len(label_stack)>0:
-                label_arr = np.array(label_stack)
-                label = np.argmax(np.bincount(label_stack))   # 得到动作标签序号
-                video_label = categories[label] 
-                # 清空动作标签的堆栈
-                label_stack.clear()
-        # record 状态下记录图片
-        if status == 'record':
-            imageCount += 1
-            out_folder = "{}/{:d}_{:d}".format(args.video_root, label, labelCount)
-            if not os.path.exists(out_folder):
-                os.makedirs(out_folder)
-            cv.imwrite("{}/{:06d}.jpg".format(out_folder,imageCount), img)
-        else:
-            imageCount = 0  # 在其他状态下清空计数
-        img = Image.fromarray(cv.cvtColor(img,cv.COLOR_BGR2RGB)).convert('RGB')
-        end = time.time()
-        print("\033[36m Receiving and processing image cost : {} ms\033[0m".format((end-start)*1000))
-
-        # 发送动作标签
-        sock.send((video_label+'\0').encode('utf-8'))
-        # if handFlag:
-            # sock.send(("1\0").encode('utf-8'))
-        # else:
-            # sock.send(("0\0").encode('utf-8'))
 
 # options
 parser = argparse.ArgumentParser(
@@ -223,8 +145,6 @@ print("Waiting for connecting...")
 # receive a new connection
 s.listen(5)
 sock, addr = s.accept()
-t = threading.Thread(target=tcplink, args=(sock,addr))
-t.start()
 # config for post process
 now_label = -1
 possible_label = -1
@@ -234,11 +154,88 @@ lasting_threshold = args.threshold
 video_label = "no predict"   # string label will be send to client
 if not os.path.exists("recvImg"):
     os.makedirs("recvImg")
+'''
+        协议：
+            'predict', 'train' :  status | buf_size
+            'record'           :  status | buf_size | if_end | label | labelCount
+'''
+print('Accept new connection from %s:%s...' % addr)
 while True:
-    print("\033[31m foo \033[0m")
+    # 接受信息，按照协议进行解析
+    start = time.time()
+    message = sock.recv(100)
+    for i in range(100):
+        char = message[i]
+        if char == 0:
+            break
+    message = message[0:i]
+    print("\033[36m [MESSAGE]:  {}\033[0m".format(message))
+    message = message.decode()
+    messages = message.split('|')
+    status = messages[0]
+    if status == 'predict' or status == 'train':
+        assert len(messages)==2
+        buf_size = int(messages[1].rstrip('\0'))
+    if status == 'record':
+        assert len(messages)==5
+        buf_size = int(messages[1])
+        if_end = messages[2]
+        label = int(messages[3])
+        labelCount = int(messages[4].rstrip('\0'))
+    if status == 'train':
+        t_train = threading.Thread(target=train)
+        t_train.start()
+    #print("\033[36m the buf size is :{}\033[0m".format(buf_size))
+    # 接收图片
+    data = sock.recv(buf_size+1, socket.MSG_WAITALL)
+    #print("\033[36m the length of data is: {}\033[0m".format(len(data)))
+    # 恢复被转换为字节流的图片
+    data = np.fromstring(data, dtype = np.uint8)
+    img = cv.imdecode(data, cv.IMREAD_COLOR)
+    # 检测图像中是否含有手
+    handFlag = detect_hand(img)
+    # cv Mat 转换为 PIL Image
+    img = Image.fromarray(cv.cvtColor(img,cv.COLOR_BGR2RGB)).convert('RGB')
+    # 维持固定长度的队列
+    showFlag = '0'
+    if handFlag:
+        print("\033[36m [HAND] have hand \033[0m")
+        print(len(q))
+        q.append(img)
+        if len(q)>args.seq_length:
+            q.popleft()
+    else:
+        print("\033[36m [HAND] no hand \033[0m")
+        # 在手退出时修改动作标签
+        if len(label_stack)>0:
+            label_arr = np.array(label_stack)
+            label = np.argmax(np.bincount(label_stack))   # 得到动作标签序号
+            video_label = categories[label] 
+            # 清空动作标签的堆栈
+            label_stack.clear()
+            # 显示动作名称
+            showFlag = '1'
+            showStatus = 1
+    if (showStatus == 1) and (showLastingCount<20):
+        showLastingCount += 1 
+        showFlag = '1'
+    else:
+        showStatus = 0
+    # record 状态下记录图片
+    if status == 'record':
+        imageCount += 1
+        out_folder = "{}/{:d}_{:d}".format(args.video_root, label, labelCount)
+        if not os.path.exists(out_folder):
+            os.makedirs(out_folder)
+        cv.imwrite("{}/{:06d}.jpg".format(out_folder,imageCount), img)
+    else:
+        imageCount = 0  # 在其他状态下清空计数
+    end = time.time()
+    print("\033[36m Receiving and processing image cost : {} ms\033[0m".format((end-start)*1000))
     # key = cv.waitKey(1)
     # if key=='q' or key=='Q':
     #     break
+    tmp_label = "no predict"
     if len(q)>=args.seq_length and handFlag:
         # process the q to get input tensor
         img_list = list(q)
@@ -257,8 +254,10 @@ while True:
         video_pred = idx[0]     # the int label for now video
         tmp_label = categories[video_pred]  # the str label for video
         print("\033[35m predict using net cost {}ms\033[0m".format(cnt_time*1000))    # print the costed time
-        label_stack.append(tmp_label)
+        label_stack.append(video_pred)
     print("\033[35m now label is : {}\033[0m".format(tmp_label))
+    # 发送动作标签
+    sock.send((video_label+showFlag+'\0').encode('utf-8'))
 s.close()
 
 
